@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat App</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0" />
+
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- Welcome Screen -->
+    <div id="welcome-screen" class="screen active">
+        <div class="glass-card">
+            <h1>Welcome</h1>
+            <p>チャットを始める前に、名前を入力してください。</p>
+            <div class="input-group">
+                <input type="text" id="username-input" placeholder="あなたの名前" maxlength="20">
+                <button id="start-btn" disabled>始める</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chat Screen -->
+    <div id="chat-screen" class="screen">
+        <header class="app-header">
+            <div class="header-left">
+                <h2>Chat</h2>
+                <span id="current-username" class="user-badge" title="名前を変更">User</span>
+            </div>
+            <div class="header-right">
+                <button id="theme-toggle" class="icon-btn" title="テーマ切り替え">
+                    <span class="material-symbols-rounded">dark_mode</span>
+                </button>
+            </div>
+        </header>
+
+        <main id="chat-container">
+            <div id="messages-area">
+                <!-- Messages will appear here -->
+                <div class="system-message">
+                    <p>チャットへようこそ！</p>
+                </div>
+            </div>
+        </main>
+
+        <footer class="chat-input-area">
+            <div class="input-wrapper">
+                <label for="image-upload" class="icon-btn" title="画像を送信">
+                    <span class="material-symbols-rounded">image</span>
+                </label>
+                <input type="file" id="image-upload" accept="image/*" hidden>
+                
+                <textarea id="message-input" rows="1" placeholder="メッセージを入力..."></textarea>
+                
+                <button id="send-btn" class="send-btn" disabled>
+                    <span class="material-symbols-rounded">send</span>
+                </button>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Edit Name Modal -->
+    <div id="name-modal" class="modal">
+        <div class="modal-content glass-card">
+            <h3>名前の変更</h3>
+            <input type="text" id="new-username-input" placeholder="新しい名前">
+            <div class="modal-actions">
+                <button id="cancel-name-btn" class="secondary-btn">キャンセル</button>
+                <button id="save-name-btn" class="primary-btn">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
