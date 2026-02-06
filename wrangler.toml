@@ -1,0 +1,9 @@
+#:schema node_modules/wrangler/config-schema.json
+name = "chat"
+compatibility_date = "2024-04-01"
+pages_build_output_dir = "./"
+
+[[d1_databases]]
+binding = "DB" # JSコード内で使う名前
+database_name = "citrus_db" # Cloudflareの管理画面で作ったDB名
+database_id = "ここにDBのIDを貼る"
