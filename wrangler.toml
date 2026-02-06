@@ -6,4 +6,4 @@ pages_build_output_dir = "./"
 [[d1_databases]]
 binding = "DB" # JSコード内で使う名前
 database_name = "citrus_db" # Cloudflareの管理画面で作ったDB名
-database_id = "ここにDBのIDを貼る"
+database_id = "a8462766-3e1e-410c-87d5-7be66bd62782"#ID完成
