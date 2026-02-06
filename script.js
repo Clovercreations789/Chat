@@ -1,20 +1,4 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-const firebaseConfig = {
-    apiKey: "AIzaSyCD1W9VLWXdnR7PLKB5duIxLbgPDLkwNXo",
-    authDomain: "chat-app-new-b17f5.firebaseapp.com",
-    projectId: "chat-app-new-b17f5",
-    storageBucket: "chat-app-new-b17f5.firebasestorage.app",
-    messagingSenderId: "992687654736",
-    appId: "1:992687654736:web:eb8793f8b731b1e49fce55",
-    measurementId: "G-Y5794PLNLH"
-};
-// ==========================================
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
 
 document.addEventListener('DOMContentLoaded', () => {
     // === DOM Elements ===
@@ -36,26 +20,65 @@ document.addEventListener('DOMContentLoaded', () => {
     // === State ===
     let currentUser = localStorage.getItem('chat_username') || '';
     let currentTheme = localStorage.getItem('chat_theme') || 'light';
-    let unsubscribe = null;
-    console.log("Debug: unsubscribe initialized");
+    let lastMessageId = 0; // 重複表示を防ぐためのID管理
 
     // === Initialization ===
-
-    // Apply theme immediately
     document.documentElement.setAttribute('data-theme', currentTheme);
     updateThemeIcon();
 
-    // Check if user exists
     if (currentUser) {
         showChatScreen();
-        initChatListener();
+        startPolling(); // 定期取得開始
     } else {
         usernameInput.focus();
     }
 
+    // === API Functions (The Core Logic) ===
+
+    // 1. メッセージを取得する (GET)
+    async function fetchMessages() {
+        try {
+            const res = await fetch('/api/messages');
+            if (!res.ok) throw new Error('Fetch failed');
+            const data = await res.json();
+
+            // 新しいメッセージがある場合のみ追加
+            const newMessages = data.filter(msg => msg.id > lastMessageId);
+            if (newMessages.length > 0) {
+                newMessages.forEach(msg => {
+                    appendMessage(msg, msg.sender === currentUser);
+                    lastMessageId = Math.max(lastMessageId, msg.id);
+                });
+                messagesArea.scrollTop = messagesArea.scrollHeight;
+            }
+        } catch (e) {
+            console.error("データ取得エラー:", e);
+        }
+    }
+
+    // 2. メッセージを送信する (POST)
+    async function sendMessage(payload) {
+        try {
+            const res = await fetch('/api/messages', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sender: currentUser,
+                    ...payload
+                })
+            });
+            if (!res.ok) throw new Error('Send failed');
+            
+            // 送信成功したら即座に更新をかける
+            await fetchMessages();
+        } catch (e) {
+            console.error("送信エラー:", e);
+            alert("メッセージの送信に失敗しました。");
+        }
+    }
+
     // === Event Listeners ===
 
-    // 1. Welcome Screen
     usernameInput.addEventListener('input', (e) => {
         startBtn.disabled = e.target.value.trim().length === 0;
     });
@@ -65,40 +88,28 @@ document.addEventListener('DOMContentLoaded', () => {
         if (name) {
             setCurrentUser(name);
             showChatScreen();
-            initChatListener();
+            startPolling();
         }
     });
 
-    // 2. Chat Logic
-    async function sendMessage() {
+    const handleTextSend = async () => {
         const text = messageInput.value.trim();
         if (!text) return;
 
-        try {
-            await addDoc(collection(db, "messages"), {
-                text: text,
-                sender: currentUser,
-                timestamp: serverTimestamp(), // Use server time
-                type: 'text'
-            });
+        messageInput.value = '';
+        messageInput.style.height = 'auto';
+        sendBtn.disabled = true;
 
-            // Clear input
-            messageInput.value = '';
-            messageInput.style.height = 'auto'; // Reset height
-            sendBtn.disabled = true;
-            messageInput.focus();
-        } catch (e) {
-            console.error("Error adding document: ", e);
-            alert("メッセージの送信に失敗しました。Firebaseの設定を確認してください。");
-        }
-    }
+        await sendMessage({ text: text, type: 'text' });
+        messageInput.focus();
+    };
 
-    sendBtn.addEventListener('click', sendMessage);
+    sendBtn.addEventListener('click', handleTextSend);
 
     messageInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
-            sendMessage();
+            handleTextSend();
         }
     });
 
@@ -108,98 +119,29 @@ document.addEventListener('DOMContentLoaded', () => {
         sendBtn.disabled = this.value.trim().length === 0;
     });
 
-    // 3. Image Handling
+    // 画像処理
     imageUpload.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) handleImageUpload(file);
     });
 
-    document.addEventListener('paste', (e) => {
-        const items = (e.clipboardData || e.originalEvent.clipboardData).items;
-        for (let item of items) {
-            if (item.type.indexOf("image") === 0) {
-                const itemFile = item.getAsFile();
-                handleImageUpload(itemFile);
-            }
-        }
-    });
-
     function handleImageUpload(file) {
         const reader = new FileReader();
-        reader.onload = async function (e) {
+        reader.onload = async (e) => {
             const base64Image = e.target.result;
-            try {
-                // Not efficient for large images in Firestore, but okay for MVP
-                await addDoc(collection(db, "messages"), {
-                    image: base64Image,
-                    sender: currentUser,
-                    timestamp: serverTimestamp(),
-                    type: 'image'
-                });
-            } catch (error) {
-                console.error("Error uploading image: ", error);
-                alert("画像の送信に失敗しました。");
-            }
+            await sendMessage({ image: base64Image, type: 'image' });
         };
         reader.readAsDataURL(file);
     }
 
-    // 4. Firestore Listener (Real-time updates)
-
-
-    function initChatListener() {
-        if (unsubscribe) return; // Already listening
-
-        const q = query(collection(db, "messages"), orderBy("timestamp", "asc"));
-
-        unsubscribe = onSnapshot(q, (snapshot) => {
-            snapshot.docChanges().forEach((change) => {
-                if (change.type === "added") {
-                    const data = change.doc.data();
-                    // Handle serverTimestamp possibly being null for local writes immediately
-                    const timestamp = data.timestamp ? data.timestamp.toDate() : new Date();
-                    const messageData = { ...data, timestamp: timestamp };
-                    appendMessage(messageData, messageData.sender === currentUser);
-                }
-            });
-        });
+    // 3秒おきに新着チェック (ポーリング)
+    function startPolling() {
+        fetchMessages(); // 初回
+        setInterval(fetchMessages, 3000);
     }
 
-    // 5. Theme Toggling
-    themeToggleBtn.addEventListener('click', () => {
-        currentTheme = currentTheme === 'light' ? 'dark' : 'light';
-        document.documentElement.setAttribute('data-theme', currentTheme);
-        localStorage.setItem('chat_theme', currentTheme);
-        updateThemeIcon();
-    });
+    // === UI Helpers (Firebase版から流用・最適化) ===
 
-    function updateThemeIcon() {
-        const iconSpan = themeToggleBtn.querySelector('span');
-        iconSpan.textContent = currentTheme === 'light' ? 'dark_mode' : 'light_mode';
-    }
-
-    // 6. Name Changing
-    currentUsernameSpan.addEventListener('click', () => {
-        newUsernameInput.value = currentUser;
-        nameModal.classList.add('active');
-        newUsernameInput.focus();
-    });
-
-    cancelNameBtn.addEventListener('click', () => {
-        nameModal.classList.remove('active');
-    });
-
-    saveNameBtn.addEventListener('click', () => {
-        const newName = newUsernameInput.value.trim();
-        if (newName) {
-            setCurrentUser(newName);
-            nameModal.classList.remove('active');
-            // Note: Old messages from this user won't update sender name unless we update DB documents
-            // For MVP, we just change local sender name for new messages
-        }
-    });
-
-    // === Helpers ===
     function setCurrentUser(name) {
         currentUser = name;
         currentUsernameSpan.textContent = currentUser;
@@ -209,26 +151,35 @@ document.addEventListener('DOMContentLoaded', () => {
     function showChatScreen() {
         welcomeScreen.classList.remove('active');
         setTimeout(() => welcomeScreen.style.display = 'none', 300);
-
         chatScreen.style.display = 'flex';
         setTimeout(() => chatScreen.classList.add('active'), 10);
-
         setCurrentUser(currentUser);
-        // Scroll to bottom
-        messagesArea.scrollTop = messagesArea.scrollHeight;
     }
+
+    function updateThemeIcon() {
+        const iconSpan = themeToggleBtn.querySelector('span');
+        iconSpan.textContent = currentTheme === 'light' ? 'dark_mode' : 'light_mode';
+    }
+
+    themeToggleBtn.addEventListener('click', () => {
+        currentTheme = currentTheme === 'light' ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', currentTheme);
+        localStorage.setItem('chat_theme', currentTheme);
+        updateThemeIcon();
+    });
 
     function appendMessage(data, isOwn) {
         const row = document.createElement('div');
         row.className = `message-row ${isOwn ? 'own' : 'other'}`;
 
-        const time = new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        // D1(SQL)から返ってくるtimestampをパース
+        const dateObj = data.timestamp ? new Date(data.timestamp) : new Date();
+        const time = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
         let contentHtml = '';
         if (data.type === 'image') {
             contentHtml = `<img src="${data.image}" class="message-image" alt="User Image">`;
         } else {
-            // Escape HTML to prevent XSS
             const safeText = (data.text || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
             contentHtml = safeText.replace(/\n/g, '<br>');
         }
@@ -240,10 +191,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 <span class="message-time">${time}</span>
             </div>
         `;
-
         messagesArea.appendChild(row);
-
-        // Smooth scroll to bottom
-        messagesArea.scrollTop = messagesArea.scrollHeight;
     }
+
+    // モーダル処理
+    currentUsernameSpan.addEventListener('click', () => {
+        newUsernameInput.value = currentUser;
+        nameModal.classList.add('active');
+    });
+    cancelNameBtn.addEventListener('click', () => nameModal.classList.remove('active'));
+    saveNameBtn.addEventListener('click', () => {
+        const newName = newUsernameInput.value.trim();
+        if (newName) {
+            setCurrentUser(newName);
+            nameModal.classList.remove('active');
+        }
+    });
 });
